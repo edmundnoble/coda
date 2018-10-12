@@ -21,11 +21,13 @@ import Dyck
 -- import Token
 
 data LayoutMismatch = LayoutMismatch !Delta !Prefix !Prefix
+  deriving (Eq, Show) -- this is for debugging the Layout Monoid
 
 instance Relative LayoutMismatch where
   rel d (LayoutMismatch d' p q) = LayoutMismatch (d <> d') p q
 
 data Run = Run {-# unpack #-} !Prefix !(Cat Dyck) {-# unpack #-} !Dyck !(Cat LayoutMismatch)
+  deriving (Eq, Show) -- this is for debugging the Layout Monoid
 
 instance Relative Run where
   rel d (Run p ds ts es) = Run p (rel d ds) (rel d ts) (rel d es)
@@ -39,8 +41,6 @@ runsDyck (x :< xs) = runDyck x <> runsDyck xs
 
 instance HasPrefix Run where
   prefix (Run p _ _ _) = p
-
--- could use Foldable for this, but when in Rome...
 
 runDycks :: Run -> Cat Dyck
 runDycks (Run _ ds _ _) = ds
@@ -60,6 +60,7 @@ data Layout
   = E {-# unpack #-} !Delta
   | S {-# unpack #-} !Delta {-# unpack #-} !Run
   | V {-# unpack #-} !Delta !(Cat Run) {-# unpack #-} !Run !(Rev Cat Run)
+  deriving (Eq, Show) -- this is for debugging the Layout Monoid
 
 instance HasDelta Layout where
   delta (E d) = d
@@ -78,6 +79,7 @@ dyckLayout d p t = S d $ Run p [t] t []
 boring :: Dyck -> Bool
 boring = views dyckLayoutMode (def ==)
 
+-- this should almost certainly be revAppendCat :: Relative a => Cat a -> Cat a -> Cat a
 revCat :: Relative a => Cat a -> Cat a
 revCat Empty = Empty
 revCat (x :< xs) = snocCat (revCat xs) x
@@ -102,10 +104,11 @@ instance Semigroup Layout where
      -- ... -- TODO: resume here
 
   -- what happens if `ts` is boring in the S <> V or V <> S cases?
+  -- - I'm guessing either not much, or that we need to dig in more deeply to work that out
   -- what do we do about the error cases?
   --   - pack everything into an S?
   --   - pack everything into whatever we would have had in the EQ case?
-  -- need to double check `rel`s in relation to the middle bit of Vs
+  -- need to double check `rel`s in relation to the middle bit of Vs (see line 90)
 
   -- TODO check the `Rev`s
   -- TODO should be special casing when a we have S attaching to V where the V is Empty on that side?
@@ -115,15 +118,18 @@ instance Semigroup Layout where
   -- fg h ji/Rij
   S d lr@(Run p ds ts es) <> V d' l m@(Run p' ds' ts' es') r = case joinAndCompare p p' of
     Left p'' -> undefined
+
     -- Empty a fghij/Rjihgf
     Right LT ->
       V (d <> d') Empty lr (Rev (revCat (rel d l)) <> Rev (Cat.singleton (rel d m)) <> rel d r)
+
     -- Empty afgh ji/Rij
     Right EQ ->
       let
         rdl = rel d l
       in
         V (d <> d') Empty (Run p (ds <> runsDycks rdl <> rel d ds') (ts <> runsDyck rdl <> rel d ts') (es <> runsMismatch rdl <> rel d es')) (rel d r)
+
     -- afg h ji/Rij
     Right GT ->
       V (d <> d') (Cat.singleton lr <> rel d l) (rel d m) (rel d r)
@@ -134,14 +140,17 @@ instance Semigroup Layout where
   -- f
   V d l m@(Run p ds ts es) r@(Rev rr) <> S d' rr'@(Run p' ds' ts' es') = case joinAndCompare p p' of
     Left p'' -> undefined
+
     -- ab c fed/Rdef
     Right LT -> V (d <> d') l m (Rev (Cat.singleton (rel d rr')) <> r)
+
     -- ab (cdef) Empty
     Right EQ ->
       let
         rrr = revCat rr
       in
         V (d <> d') l (Run p' (ds <> runsDycks rrr <> rel d ds') (ts <> runsDyck rrr <> rel d ts') (es <> runsMismatch rrr <> rel d es')) Empty
+
     -- abcde f Empty
     Right GT -> V (d <> d') (l <> Cat.singleton m <> revCat rr) (rel d rr') Empty
 
@@ -149,8 +158,10 @@ instance Semigroup Layout where
   -- fg h ji/Rij
   V d l m@(Run p ds ts es) r@(Rev rr) <> V d' l' m'@(Run p' ds' ts' es') r' = case joinAndCompare p p' of
     Left p'' -> undefined
+
     -- ab c jihgfed/Rdefghij
     Right LT -> V (d <> d') l m (rel d r' <> Rev (Cat.singleton (rel d m')) <> Rev (revCat (rel d l')) <> r)
+
     -- ab cdefgh ji/Rij
     Right EQ ->
       let
@@ -158,6 +169,7 @@ instance Semigroup Layout where
         rdl' = rel d l'
       in
         V (d <> d') l (Run (prefix m) (ds <> runsDycks rrr <> runsDycks rdl' <> rel d ds') (ts <> runsDyck rrr <> runsDyck rdl' <> rel d ts') (es <> runsMismatch rrr <> runsMismatch rdl' <> rel d es')) (rel d r')
+
     -- abcdefg h ji/Rij
     Right GT -> V (d <> d') (l <> Cat.singleton m <> revCat rr <> rel d l') (rel d m') (rel d r')
 
