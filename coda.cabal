@@ -238,6 +238,17 @@ library syntax
 
   other-modules: Syntax
 
+library layout-test
+  import: base
+  hs-source-dirs: src/layout-test
+  build-depends: token, dyck, layout
+  mixins:
+    dyck requires (Token as Syntax.Token),
+    layout requires (Token as Syntax.Token)
+  other-modules: LayoutTest
+  reexported-modules:
+    Layout
+
 library set
   import: base, data-default, deepseq, lens
   hs-source-dirs: src/set
@@ -325,12 +336,13 @@ test-suite lsp-test
   hs-source-dirs: app/lsp-test
   autogen-modules: Paths_coda
   other-modules:
+    LayoutTest
     ListTest
     MessageTest
     MapTest
     Paths_coda
   build-tool-depends: tasty-discover:tasty-discover >= 3.0 && < 4.3
-  build-depends: algebra, lsp, syntax
+  build-depends: algebra, lsp, syntax, layout-test
   build-depends:
     QuickCheck,
     tasty >= 0.11,
