@@ -127,8 +127,11 @@ instance Semigroup Layout where
     Right EQ ->
       let
         rdl = rel d l
+        m' = Run p (ds <> runsDycks rdl <> rel d ds') (ts <> runsDyck rdl <> rel d ts') (es <> runsMismatch rdl <> rel d es')
       in
-        V (d <> d') Empty (Run p (ds <> runsDycks rdl <> rel d ds') (ts <> runsDyck rdl <> rel d ts') (es <> runsMismatch rdl <> rel d es')) (rel d r)
+        if has _Empty r
+        then S (d <> d') m'
+        else V (d <> d') Empty m' (rel d r)
 
     -- afg h ji/Rij
     Right GT ->
@@ -148,8 +151,11 @@ instance Semigroup Layout where
     Right EQ ->
       let
         rrr = revCat rr
+        m' = Run p' (ds <> runsDycks rrr <> rel d ds') (ts <> runsDyck rrr <> rel d ts') (es <> runsMismatch rrr <> rel d es')
       in
-        V (d <> d') l (Run p' (ds <> runsDycks rrr <> rel d ds') (ts <> runsDyck rrr <> rel d ts') (es <> runsMismatch rrr <> rel d es')) Empty
+        if has _Empty l
+        then S (d <> d') m'
+        else V (d <> d') l m' Empty
 
     -- abcde f Empty
     Right GT -> V (d <> d') (l <> Cat.singleton m <> revCat rr) (rel d rr') Empty
@@ -167,8 +173,11 @@ instance Semigroup Layout where
       let
         rrr = revCat rr
         rdl' = rel d l'
+        m'' = Run (prefix m) (ds <> runsDycks rrr <> runsDycks rdl' <> rel d ds') (ts <> runsDyck rrr <> runsDyck rdl' <> rel d ts') (es <> runsMismatch rrr <> runsMismatch rdl' <> rel d es')
       in
-        V (d <> d') l (Run (prefix m) (ds <> runsDycks rrr <> runsDycks rdl' <> rel d ds') (ts <> runsDyck rrr <> runsDyck rdl' <> rel d ts') (es <> runsMismatch rrr <> runsMismatch rdl' <> rel d es')) (rel d r')
+        if has _Empty l && has _Empty r'
+        then S (d <> d') m''
+        else V (d <> d') l m'' (rel d r')
 
     -- abcdefg h ji/Rij
     Right GT -> V (d <> d') (l <> Cat.singleton m <> revCat rr <> rel d l') (rel d m') (rel d r')
