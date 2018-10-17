@@ -238,7 +238,7 @@ library syntax
 
   other-modules: Syntax
 
-library layout-test
+library layout-test-helper
   import: base
   hs-source-dirs: src/layout-test
   build-depends: token, dyck, layout
@@ -336,13 +336,33 @@ test-suite lsp-test
   hs-source-dirs: app/lsp-test
   autogen-modules: Paths_coda
   other-modules:
-    LayoutTest
     ListTest
     MessageTest
     MapTest
     Paths_coda
   build-tool-depends: tasty-discover:tasty-discover >= 3.0 && < 4.3
-  build-depends: algebra, lsp, syntax, layout-test
+  build-depends: algebra, lsp, syntax
+  build-depends:
+    QuickCheck,
+    tasty >= 0.11,
+    tasty-quickcheck,
+    tasty-golden >= 2.3,
+    tasty-hunit >= 0.9,
+  if !flag(test-tasty)
+    buildable: False
+
+test-suite layout-test
+  import: aeson, app, base, bifunctors, bytestring, containers, filepath,
+          lens, tagged, text
+  main-is: Main.hs
+  type: exitcode-stdio-1.0
+  hs-source-dirs: app/layout-test
+  autogen-modules: Paths_coda
+  other-modules:
+    Paths_coda
+    LayoutTest
+  build-tool-depends: tasty-discover:tasty-discover >= 3.0 && < 4.3
+  build-depends: common, algebra, syntax, lsp, layout-test-helper
   build-depends:
     QuickCheck,
     tasty >= 0.11,
