@@ -18,7 +18,6 @@ import Rev
 import Syntax.Prefix
 
 import Dyck
--- import Token
 
 data LayoutMismatch = LayoutMismatch !Delta !Prefix !Prefix
   deriving (Eq, Show) -- this is for debugging the Layout Monoid
@@ -84,17 +83,57 @@ revCat :: Relative a => Cat a -> Cat a
 revCat Empty = Empty
 revCat (x :< xs) = snocCat (revCat xs) x
 
+-- This is a V
+-- do
+--   foo
+--   bar
+
+-- This is a S, because the layout of f is boring
+-- f
+--   foo
+--   bar
+
+-- need to deal with boringness/not-boringness when these things collide
+
+-- f
+--   foo
+-- <>
+--   bar
+-- g
+--   baz
+
+-- do
+--   foo
+-- <>
+--   bar
+-- g
+--   baz
+
+-- S V(empty left)
+-- S V(cons left)
+
+-- V(empty right) S
+-- V(cons right) S
+
+-- V(empty right) V(empty left)
+-- V(empty right) V(cons left)
+-- V(cons right) V(empty left)
+-- V(cons right) V(cons left)
+
+-- boring -> packed into a run
+
+
 instance Semigroup Layout where
   E 0 <> xs = xs
   xs <> E 0 = xs
   E d <> E d' = E (d <> d')
   E d <> S d' (Run p ds ts es) = S (d <> d') $ Run p (rel d ds) (rel d ts) (rel d es)
-  E d <> V d' l m r = V (d <> d') (rel d l) m (rel d r)
+  E d <> V d' l m r = V (d <> d') (rel d l) (rel d m) (rel d r)
   S d (Run p ds ts es) <> E d' = S (d <> d') $ Run p ds ts es
   S d lr@(Run p ds ts es) <> S d' rr@(Run p' ds' ts' es') = case joinAndCompare p p' of
     Left p'' -> S (d <> d') $ Run p'' (ds <> rel d ds') (ts <> rel d ts') (snocCat es (LayoutMismatch d p p') <> rel d es') -- no common prefix
     Right LT -- indent
-      | boring ts -> S (d <> d') $ Run p (ds <> rel d ds') (ts <> rel d ts') Empty
+      | boring ts -> S (d <> d') $ Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')
       | otherwise -> V (d <> d') Empty lr $ Rev $ Cat.singleton (rel d rr)
     Right EQ -> S (d <> d') $ Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')
     Right GT -> V (d <> d') (Cat.singleton lr) (rel d rr) Empty
@@ -103,21 +142,16 @@ instance Semigroup Layout where
   --   Left p'' | has _Empty r -> undefined -- S $ Run (d <> d') p''
      -- ... -- TODO: resume here
 
-  -- what happens if `ts` is boring in the S <> V or V <> S cases?
-  -- - I'm guessing either not much, or that we need to dig in more deeply to work that out
   -- what do we do about the error cases?
   --   - pack everything into an S?
   --   - pack everything into whatever we would have had in the EQ case?
-  -- need to double check `rel`s in relation to the middle bit of Vs (see line 90)
 
   -- TODO check the `Rev`s
-  -- TODO should be special casing when a we have S attaching to V where the V is Empty on that side?
-  --      or is it taken care of for us anyhow?
 
   -- a
   -- fg h ji/Rij
   S d lr@(Run p ds ts es) <> V d' l m@(Run p' ds' ts' es') r = case joinAndCompare p p' of
-    Left p'' -> undefined
+    Left p'' -> error "boom 1"
 
     -- Empty a fghij/Rjihgf
     Right LT ->
@@ -142,7 +176,7 @@ instance Semigroup Layout where
   -- ab c ed/Rde
   -- f
   V d l m@(Run p ds ts es) r@(Rev rr) <> S d' rr'@(Run p' ds' ts' es') = case joinAndCompare p p' of
-    Left p'' -> undefined
+    Left p'' -> error "boom 2"
 
     -- ab c fed/Rdef
     Right LT -> V (d <> d') l m (Rev (Cat.singleton (rel d rr')) <> r)
@@ -163,7 +197,7 @@ instance Semigroup Layout where
   -- ab c ed/Rde
   -- fg h ji/Rij
   V d l m@(Run p ds ts es) r@(Rev rr) <> V d' l' m'@(Run p' ds' ts' es') r' = case joinAndCompare p p' of
-    Left p'' -> undefined
+    Left p'' -> error "boom 3"
 
     -- ab c jihgfed/Rdefghij
     Right LT -> V (d <> d') l m (rel d r' <> Rev (Cat.singleton (rel d m')) <> Rev (revCat (rel d l')) <> r)
