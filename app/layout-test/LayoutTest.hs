@@ -34,26 +34,111 @@ ptxt n = dyckLayout 0 (Prefix . Text.pack . replicate n $ ' ') . Lex.lex
 txt :: Text -> Layout
 txt = dyckLayout 0 (Prefix "") . Lex.lex
 
+exampleA :: Text
+exampleA =
+  "do \n\
+  \   x\n\
+  \   y\n\
+  \"
+
+exampleB :: Text
+exampleB =
+  "foo \n\
+  \   x\n\
+  \   y\n\
+  \"
+
+exampleC :: Text
+exampleC =
+  "do \n\
+  \   x\n\
+  \ \t y\n\
+  \"
+
+exampleD :: Text
+exampleD =
+  "foo \n\
+  \   x\n\
+  \ \t y\n\
+  \"
+
+example0_0 :: Text
+example0_0 =
+  "let \n\
+  \{  x = 1\n\
+  \ \t y = 2\n\
+  \   z = 3\n\
+  \}"
+
+example0_1a :: Text
+example0_1a =
+  "let \n"
+example0_1b :: Text
+example0_1b =
+  "{  x = 1\n\
+  \ \t y = 2\n\
+  \   z = 3\n\
+  \}"
+
+example0_2a :: Text
+example0_2a =
+  "let \n\
+  \  x = 1\n"
+example0_2b :: Text
+example0_2b =
+  "\t y = 2\n\
+  \  z = 3\n\
+  \"
+
+example0_3a :: Text
+example0_3a =
+  "let \n\
+  \  x = 1\n\
+  \t y = 2\n"
+example0_3b :: Text
+example0_3b =
+  "  z = 3\n\
+  \"
+
+example0_4a :: Text
+example0_4a =
+  "let \n\
+  \  x = 1\n\
+  \t y = 2\n\
+  \  z = 3\n"
+example0_4b :: Text
+example0_4b =
+  ""
+
+example0 :: Text
+example0 =
+  "let \n\
+  \  x = 1\n\
+  \\t y = 2\n\
+  \  z = 3\n\
+  \"
+
 example1 :: Text
 example1 =
-  "let {\n\
-  \\t x = 1\n\
-  \  y = 2\n\
+  "let \n\
+  \{  x = 1\n\
+  \ \t y = 2\n\
+  \   z = 3\n\
   \}"
 
 example2 :: Text
 example2 =
-  "let {\n\
-  \  x = let {\n\
-  \        a = 1\n\
+  "let \n\
+  \{ x = let \n\
+  \      { a = 1\n\
   \        b = 1\n\
   \      }\n\
-  \  y = let {\n\
-  \      c = 3\n\
-  \      d = 4\n\
-  \    }\n\
-  \  z = let {\n\
-  \        e = 5\n\
+  \  y = let \n\
+  \      { c = 3\n\
+  \        d = 4\n\
+  \      }\n\
+  \  z = let \n\
+  \      { e = 5\n\
   \        f = 6\n\
   \      }\n\
   \}"
@@ -88,55 +173,37 @@ textToLayouts t =
   in
     fmap f [0..length ts - 1]
 
+textsToLayout :: Text -> Text -> Layout
+textsToLayout t1 t2 =
+  let
+    (d, ls1) = linesToLayouts 0 (Text.lines t1)
+    (_, ls2) = linesToLayouts d (Text.lines t2)
+  in
+    foldl (<>) mempty ls1 <> foldl (<>) mempty ls2
+
 allEq :: Eq a => [a] -> Bool
 allEq xs =
   and $ zipWith (==) xs (tail xs)
 
 test_layout :: TestTree
 test_layout = testGroup "layout"
-  [ testCase "ed" $ E 0 <> txt "a" @=? txt "a"
-  , testCase "de" $ txt "a" <> E 0 @=? txt "a"
-  , testCase "ee" $ E 1 <> E 2 @=? E 3
+  [
+    -- testCase "ed" $ E 0 <> txt "a" @=? txt "a"
+  -- , testCase "de" $ txt "a" <> E 0 @=? txt "a"
+  -- , testCase "ee" $ E 1 <> E 2 @=? E 3
 
+    testCase "A" $ E 0 @=? textsToLayout exampleA ""
+  , testCase "B" $ E 0 @=? textsToLayout exampleB ""
+  , testCase "C" $ E 0 @=? textsToLayout exampleC ""
+  , testCase "D" $ E 0 @=? textsToLayout exampleD ""
 
   -- just taking a peek at what is going on with example1
-  , testCase "blah" $ [] @=? textToLayouts example1
+  -- , testCase "0" $ E 0 @=? textsToLayout example0_0 ""
+  -- , testCase "1" $ textsToLayout example0_0 "" @=? textsToLayout example0_1a example0_1b
+  -- , testCase "2" $ textsToLayout example0_0 "" @=? textsToLayout example0_2a example0_2b
+  -- , testCase "3" $ textsToLayout example0_0 "" @=? textsToLayout example0_3a example0_3b
+  -- , testCase "4" $ textsToLayout example0_0 "" @=? textsToLayout example0_4a example0_4b
 
-  , testCase "example1" $ True @=? allEq (textToLayouts example1)
-  , testCase "example2" $ True @=? allEq (textToLayouts example2)
-
-  , testCase "lexme" $ Lex.lex "do { 1 }" @=? token mempty (Token 2 "Hi")
-  , testCase "lexme" $
-      let
-        p1 = "do { "
-        l1 = Text.length p1
-        t1 = Lex.lex p1
-        p2 = "1 }"
-        t2 = rel (fromIntegral l1) $ Lex.lex p2
-      in
-        t1 <> t2 @=? token mempty (Token 2 "Hi")
-
-  -- , testCase "lexme" $ Lex.lex "do" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [] (Rev {runRev = []}) [TokenKeyword 0 KDo] LDo []
-
-  -- , testCase "lexme" $ Lex.lex "do {" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo] (Rev {runRev = [Opening (Located 3 Brace) []]}) [] LNone []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo] (Rev {runRev = [Opening (Located 3 Brace) []]}) [TokenInteger 5 1] LNone []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1 }" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo] (Rev {runRev = []}) [TokenNested (Located 3 Brace) [TokenInteger 5 1]] LNone []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1 } do" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo] (Rev {runRev = []}) [TokenNested (Located 3 Brace) [TokenInteger 5 1],TokenKeyword 9 KDo] LDo []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1 } do {" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo,TokenNested (Located 3 Brace) [TokenInteger 5 1],TokenKeyword 9 KDo] (Rev {runRev = [Opening (Located 12 Brace) []]}) [] LNone []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1 } do { 2" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo,TokenNested (Located 3 Brace) [TokenInteger 5 1],TokenKeyword 9 KDo] (Rev {runRev = [Opening (Located 12 Brace) []]}) [TokenInteger 14 2] LNone []
-
-  -- , testCase "lexme" $ Lex.lex "do { 1 } do { 2 }" @=? token mempty (Token 2 "Hi")
-  --   -- ^ Dyck [] [TokenKeyword 0 KDo,TokenNested (Located 3 Brace) [TokenInteger 5 1],TokenKeyword 9 KDo] (Rev {runRev = []}) [TokenNested (Located 12 Brace) [TokenInteger 14 2]] LNone []
+  -- , testCase "example1" $ True @=? allEq (textToLayouts example1)
+  -- , testCase "example2" $ True @=? allEq (textToLayouts example2)
   ]
