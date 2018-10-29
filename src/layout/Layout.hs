@@ -83,32 +83,6 @@ revCat :: Relative a => Cat a -> Cat a
 revCat Empty = Empty
 revCat (x :< xs) = snocCat (revCat xs) x
 
--- This is a V
--- do
---   foo
---   bar
-
--- This is a S, because the layout of f is boring
--- f
---   foo
---   bar
-
--- need to deal with boringness/not-boringness when these things collide
-
--- f
---   foo
--- <>
---   bar
--- g
---   baz
-
--- do
---   foo
--- <>
---   bar
--- g
---   baz
-
 -- S V(empty left)
 -- S V(cons left)
 
@@ -122,6 +96,8 @@ revCat (x :< xs) = snocCat (revCat xs) x
 
 -- boring -> packed into a run
 
+-- the main thing i remember in there was using two forms of runs one for closings and one for openings because openings aren't collapsed yet
+-- and the need to keep track of the full concatenation of all the dyck language bits just in case you got outdented and needed to dump all your text into a peer
 
 instance Semigroup Layout where
   E 0 <> xs = xs
@@ -142,11 +118,15 @@ instance Semigroup Layout where
   --   Left p'' | has _Empty r -> undefined -- S $ Run (d <> d') p''
      -- ... -- TODO: resume here
 
+  -- can we use a V with an empty middle bit to handle runs?
+  -- not so much, because we'd need to normalize the balance between either end
+  -- we also want access to both ends of the run, which could make normalizing it hard
+  -- we could add a normalize function, and have our test be equality-after-normalization
+  -- we possibly want R (Cat Run) and RV (Cat Run) (Cat Run) (Rev (Cat Run)) (Rev (Cat Run))
+
   -- what do we do about the error cases?
   --   - pack everything into an S?
   --   - pack everything into whatever we would have had in the EQ case?
-
-  -- TODO check the `Rev`s
 
   -- a
   -- fg h ji/Rij
@@ -155,7 +135,17 @@ instance Semigroup Layout where
 
     -- Empty a fghij/Rjihgf
     Right LT ->
-      V (d <> d') Empty lr (Rev (revCat (rel d l)) <> Rev (Cat.singleton (rel d m)) <> rel d r)
+      case preview _Cons l of
+          Nothing
+            | boring ts ->
+              V (d <> d') Empty (Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')) (rel d r)
+            | otherwise ->
+              V (d <> d') Empty lr (Rev (Cat.singleton (rel d m)) <> rel d r)
+          Just (Run p'' ds'' ts'' es'', xs) 
+            | boring ts'' -> -- TODO compare prefixes?
+              V (d <> d') Empty (Run p (ds <> rel d ds'') (ts <> rel d ts'') (es <> rel d es'')) (Rev (revCat (rel d xs)) <> Rev (Cat.singleton (rel d m)) <> rel d r)
+            | otherwise ->
+              V (d <> d') Empty lr (Rev (revCat (rel d l)) <> Rev (Cat.singleton (rel d m)) <> rel d r)
 
     -- Empty afgh ji/Rij
     Right EQ ->
@@ -179,7 +169,18 @@ instance Semigroup Layout where
     Left p'' -> error "boom 2"
 
     -- ab c fed/Rdef
-    Right LT -> V (d <> d') l m (Rev (Cat.singleton (rel d rr')) <> r)
+    Right LT -> 
+      case preview _Cons rr of
+          Nothing 
+            | boring ts ->
+              V (d <> d') l (Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')) Empty
+            | otherwise -> 
+              V (d <> d') l m (Rev (Cat.singleton (rel d rr')))
+          Just (Run p'' ds'' ts'' es'', xs)
+            | boring ts'' -> -- TODO compare prefixes?
+              V (d <> d') l m $ Rev $ review _Cons (Run p'' (ds'' <> rel d ds') (ts'' <> rel d ts') (es'' <> rel d es'), xs)
+            | otherwise ->
+              V (d <> d') l m (r <> Rev (Cat.singleton (rel d rr')))
 
     -- ab (cdef) Empty
     Right EQ ->
@@ -200,7 +201,7 @@ instance Semigroup Layout where
     Left p'' -> error "boom 3"
 
     -- ab c jihgfed/Rdefghij
-    Right LT -> V (d <> d') l m (rel d r' <> Rev (Cat.singleton (rel d m')) <> Rev (revCat (rel d l')) <> r)
+    Right LT -> V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
 
     -- ab cdefgh ji/Rij
     Right EQ ->
