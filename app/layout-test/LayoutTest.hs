@@ -16,6 +16,7 @@ import qualified Data.Text as Text
 
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
 
 import FingerTree hiding (Position)
 import Syntax.Prefix
@@ -36,112 +37,25 @@ txt = dyckLayout 0 (Prefix "") . Lex.lex
 
 exampleA :: Text
 exampleA =
-  "do \n\
-  \   x\n\
-  \   y\n\
+  "do\n\
+  \  foo \n\
+  \    bar\n\
+  \  two\n\
   \"
 
 exampleB :: Text
 exampleB =
-  "foo \n\
-  \   x\n\
-  \   y\n\
+  "do\n\
+  \  foo \n\
+  \  do\n\
+  \    foo\n\
   \"
 
 exampleC :: Text
 exampleC =
-  "do \n\
-  \   x\n\
-  \ \t y\n\
+  "do\n\
+  \  foo \n\
   \"
-
-exampleD :: Text
-exampleD =
-  "foo \n\
-  \   x\n\
-  \ \t y\n\
-  \"
-
-example0_0 :: Text
-example0_0 =
-  "let \n\
-  \{  x = 1\n\
-  \ \t y = 2\n\
-  \   z = 3\n\
-  \}"
-
-example0_1a :: Text
-example0_1a =
-  "let \n"
-example0_1b :: Text
-example0_1b =
-  "{  x = 1\n\
-  \ \t y = 2\n\
-  \   z = 3\n\
-  \}"
-
-example0_2a :: Text
-example0_2a =
-  "let \n\
-  \  x = 1\n"
-example0_2b :: Text
-example0_2b =
-  "\t y = 2\n\
-  \  z = 3\n\
-  \"
-
-example0_3a :: Text
-example0_3a =
-  "let \n\
-  \  x = 1\n\
-  \t y = 2\n"
-example0_3b :: Text
-example0_3b =
-  "  z = 3\n\
-  \"
-
-example0_4a :: Text
-example0_4a =
-  "let \n\
-  \  x = 1\n\
-  \t y = 2\n\
-  \  z = 3\n"
-example0_4b :: Text
-example0_4b =
-  ""
-
-example0 :: Text
-example0 =
-  "let \n\
-  \  x = 1\n\
-  \\t y = 2\n\
-  \  z = 3\n\
-  \"
-
-example1 :: Text
-example1 =
-  "let \n\
-  \{  x = 1\n\
-  \ \t y = 2\n\
-  \   z = 3\n\
-  \}"
-
-example2 :: Text
-example2 =
-  "let \n\
-  \{ x = let \n\
-  \      { a = 1\n\
-  \        b = 1\n\
-  \      }\n\
-  \  y = let \n\
-  \      { c = 3\n\
-  \        d = 4\n\
-  \      }\n\
-  \  z = let \n\
-  \      { e = 5\n\
-  \        f = 6\n\
-  \      }\n\
-  \}"
 
 linesToLayouts :: Delta -> [Text] -> (Delta, [Layout])
 linesToLayouts d0 ls =
@@ -171,7 +85,7 @@ textToLayouts t =
       in
         fold ls1 <> fold ls2
   in
-    fmap f [0..length ts - 1]
+    fmap f [1..length ts - 1]
 
 textsToLayout :: Text -> Text -> Layout
 textsToLayout t1 t2 =
@@ -185,25 +99,102 @@ allEq :: Eq a => [a] -> Bool
 allEq xs =
   and $ zipWith (==) xs (tail xs)
 
+
+-- The property to target is 
+--   allEq . textToLayouts $ txt
+--
+-- The text would come from one of two models
+-- - one with no mismatched indents
+-- - one with at least one mismatched indents
+
+newtype Indent = Indent { unIndent :: Int }
+  deriving (Eq, Ord, Show)
+
+data Model = 
+    SingleToken Text
+  | MultiToken [(Int, Text)]
+  | Do Int [Model]
+  | Lines [Model]
+  deriving (Eq, Ord)
+
+modelToText :: Model -> Text
+modelToText = 
+  modelToText' 0
+
+modelToText' :: Int -> Model -> Text
+modelToText' i (SingleToken t) = Text.pack $
+  replicate i ' ' ++ Text.unpack t ++ "\n"
+modelToText' i (MultiToken xs) =  Text.pack $
+  foldMap (\(j, t) -> replicate (i + j) ' ' ++ Text.unpack t ++ "\n") xs
+modelToText' i (Do j xs) = Text.pack $
+  replicate i ' ' ++ "do\n" ++ Text.unpack (foldMap (modelToText' (i + j)) xs)
+modelToText' i (Lines xs) = 
+  foldMap (modelToText' i) xs
+
+instance Show Model where
+  show = Text.unpack . modelToText
+
+instance Arbitrary Indent where
+  arbitrary = Indent <$> choose (1, 5)
+  shrink = fmap Indent . shrink . unIndent
+
+genSingleToken :: Gen Model
+genSingleToken = 
+  SingleToken <$> elements ["one", "two", "three"]
+
+genMultiToken :: Gen Model
+genMultiToken = 
+  let
+    genMT1 = 
+      pure [(0, "foo")]
+    genMT2 = do
+      Indent i <- arbitrary
+      pure [(0, "foo"), (i, "bar")]
+    genMT3 = do
+      Indent i <- arbitrary
+      Indent j <- arbitrary
+      pure [(0, "foo"), (i, "bar"), (i + j, "baz")]
+  in
+    MultiToken <$> oneof [genMT1, genMT2, genMT3]
+
+genDo :: Gen Model
+genDo = sized $ \s -> do
+  Indent i <- arbitrary
+  n <- choose (1, fromIntegral . floor . sqrt . fromIntegral $ s)
+  xs <- sequence . replicate n . resize (s `div` n) $ arbitrary
+  pure $ Do i xs
+
+genLines :: Gen Model
+genLines = sized $ \s -> do
+  n <- choose (1, fromIntegral . floor . sqrt . fromIntegral $ s)
+  xs <- sequence . replicate n . resize (s `div` n) $ arbitrary
+  pure $ Lines xs
+
+instance Arbitrary Model where
+  arbitrary = 
+    -- oneof [genSingleToken, genMultiToken, genLines]
+    oneof [genSingleToken, genMultiToken, genDo, genLines]
+  shrink (SingleToken _) = 
+    []
+  shrink (MultiToken [x]) = 
+    []
+  shrink (MultiToken [x,y]) = 
+    [MultiToken [x]]
+  shrink (MultiToken [x,y,z]) = 
+    [MultiToken [x,y]]
+  shrink (Do i xs) = 
+    xs ++ (fmap (Do i) . filter (not . null) . shrinkList shrink $ xs)
+  shrink (Lines xs) = 
+    xs ++ (fmap Lines . filter (not . null) . shrinkList shrink $ xs)
+
 test_layout :: TestTree
 test_layout = testGroup "layout"
   [
-    -- testCase "ed" $ E 0 <> txt "a" @=? txt "a"
-  -- , testCase "de" $ txt "a" <> E 0 @=? txt "a"
-  -- , testCase "ee" $ E 1 <> E 2 @=? E 3
-
-    testCase "A" $ E 0 @=? textsToLayout exampleA ""
-  , testCase "B" $ E 0 @=? textsToLayout exampleB ""
-  , testCase "C" $ E 0 @=? textsToLayout exampleC ""
-  , testCase "D" $ E 0 @=? textsToLayout exampleD ""
-
-  -- just taking a peek at what is going on with example1
-  -- , testCase "0" $ E 0 @=? textsToLayout example0_0 ""
-  -- , testCase "1" $ textsToLayout example0_0 "" @=? textsToLayout example0_1a example0_1b
-  -- , testCase "2" $ textsToLayout example0_0 "" @=? textsToLayout example0_2a example0_2b
-  -- , testCase "3" $ textsToLayout example0_0 "" @=? textsToLayout example0_3a example0_3b
-  -- , testCase "4" $ textsToLayout example0_0 "" @=? textsToLayout example0_4a example0_4b
-
-  -- , testCase "example1" $ True @=? allEq (textToLayouts example1)
-  -- , testCase "example2" $ True @=? allEq (textToLayouts example2)
+    testProperty "all eq" $ allEq . textToLayouts . modelToText
+  -- , testCase "A1" $ [] @=? textToLayouts exampleA
+  -- , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
+  -- , testCase "B1" $ [] @=? textToLayouts exampleB
+  -- , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
+  -- , testCase "C1" $ [] @=? textToLayouts exampleC
+  -- , testCase "C2" $ True @=? (allEq . textToLayouts) exampleC
   ]
