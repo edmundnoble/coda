@@ -201,7 +201,26 @@ instance Semigroup Layout where
     Left p'' -> error "boom 3"
 
     -- ab c jihgfed/Rdefghij
-    Right LT -> V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
+    Right LT -> 
+      case preview _Cons rr of
+        Nothing ->
+          | boring ts -> 
+            case preview _Cons l' of
+              Nothing -> 
+                V (d <> d') l (Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')) (rel d r')
+              Just (Run p''' ds''' ts''' es''', xs') ->
+                V (d <> d') l (Run p (ds <> rel d ds'') (ts <> rel d ts'') (es <> rel d es'')) (Rev (revCat (rel d xs')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
+          | otherwise ->
+              V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
+        Just (Run p'' ds'' ts'' es'',xs )
+          | boring ts'' -> 
+            case preview _Cons l' of
+              Nothing ->
+                V (d <> d') l _ _
+              Just (Run p''' ds''' ts''' es''', xs') ->
+                V (d <> d') l _ _
+          | otherwise -> 
+              V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
 
     -- ab cdefgh ji/Rij
     Right EQ ->

@@ -35,13 +35,15 @@ ptxt n = dyckLayout 0 (Prefix . Text.pack . replicate n $ ' ') . Lex.lex
 txt :: Text -> Layout
 txt = dyckLayout 0 (Prefix "") . Lex.lex
 
+-- 23 overall
+-- 4 / 13 / 25
+
 exampleA :: Text
 exampleA =
   "do\n\
-  \  foo \n\
+  \  foo\n\
   \    bar\n\
-  \  two\n\
-  \"
+  \  baz"
 
 exampleB :: Text
 exampleB =
@@ -54,7 +56,8 @@ exampleB =
 exampleC :: Text
 exampleC =
   "do\n\
-  \  foo \n\
+  \  one\n\
+  \  two\n\
   \"
 
 linesToLayouts :: Delta -> [Text] -> (Delta, [Layout])
@@ -191,8 +194,8 @@ test_layout :: TestTree
 test_layout = testGroup "layout"
   [
     testProperty "all eq" $ allEq . textToLayouts . modelToText
-  -- , testCase "A1" $ [] @=? textToLayouts exampleA
-  -- , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
+  , testCase "A1" $ [] @=? textToLayouts exampleA
+  , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
   -- , testCase "B1" $ [] @=? textToLayouts exampleB
   -- , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
   -- , testCase "C1" $ [] @=? textToLayouts exampleC
