@@ -203,22 +203,28 @@ instance Semigroup Layout where
     -- ab c jihgfed/Rdefghij
     Right LT -> 
       case preview _Cons rr of
-        Nothing ->
+        Nothing
           | boring ts -> 
             case preview _Cons l' of
               Nothing -> 
                 V (d <> d') l (Run p (ds <> rel d ds') (ts <> rel d ts') (es <> rel d es')) (rel d r')
               Just (Run p''' ds''' ts''' es''', xs') ->
-                V (d <> d') l (Run p (ds <> rel d ds'') (ts <> rel d ts'') (es <> rel d es'')) (Rev (revCat (rel d xs')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
+                V (d <> d') l (Run p (ds <> rel d ds''') (ts <> rel d ts''') (es <> rel d es''')) (Rev (revCat (rel d xs')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
           | otherwise ->
               V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
-        Just (Run p'' ds'' ts'' es'',xs )
+        Just (Run p'' ds'' ts'' es'', xs)
           | boring ts'' -> 
             case preview _Cons l' of
               Nothing ->
-                V (d <> d') l _ _
-              Just (Run p''' ds''' ts''' es''', xs') ->
-                V (d <> d') l _ _
+                V (d <> d') l m (Rev (Cat.singleton(Run p'' (ds'' <> rel d ds') (ts'' <> rel d ts') (es'' <> rel d es'))) <> (rel d r'))
+              Just (Run p''' ds''' ts''' es''', xs') -> case joinAndCompare p'' p' of
+                Left p'' -> error "boom 4"
+                Right EQ ->
+                  -- dropping stuff seems risky
+                  V (d <> d') l m (Rev xs <> Rev (Cat.singleton (Run p'' (ds'' <> rel d ds''' <> rel d ds') (ts'' <> rel d ts''' <> rel d ts') (es'' <> rel d es''' <> rel d es'))) <> rel d r')
+                  -- V (d <> d') l m (Rev xs <> Rev (Cat.singleton (Run p'' (ds'' <> rel d ds''') (ts'' <> rel d ts''') (es'' <> rel d es'''))) <> Rev (revCat (rel d xs')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
+                _ ->
+                  V (d <> d') l m (Rev xs <> Rev (Cat.singleton (Run p'' (ds'' <> rel d ds''') (ts'' <> rel d ts''') (es'' <> rel d es'''))) <> Rev (revCat (rel d xs')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
           | otherwise -> 
               V (d <> d') l m (r <> Rev (revCat (rel d l')) <> Rev (Cat.singleton (rel d m')) <> rel d r')
 
