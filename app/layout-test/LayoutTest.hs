@@ -48,9 +48,9 @@ exampleA =
 exampleB :: Text
 exampleB =
   "do\n\
-  \  foo \n\
   \  do\n\
   \    foo\n\
+  \  foo \n\
   \"
 
 exampleC :: Text
@@ -58,6 +58,18 @@ exampleC =
   "do\n\
   \  one\n\
   \  two\n\
+  \"
+
+exampleD :: Text
+exampleD =
+  "do\n\
+  \  do\n\
+  \    one\n\
+  \      two\n\
+  \    three\n\
+  \      four\n\
+  \  five\n\
+  \    six\n\
   \"
 
 linesToLayouts :: Delta -> [Text] -> (Delta, [Layout])
@@ -194,10 +206,12 @@ test_layout :: TestTree
 test_layout = testGroup "layout"
   [
     testProperty "all eq" $ allEq . textToLayouts . modelToText
-  , testCase "A1" $ [] @=? textToLayouts exampleA
-  , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
-  -- , testCase "B1" $ [] @=? textToLayouts exampleB
-  -- , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
+  -- , testCase "A1" $ [] @=? textToLayouts exampleA
+  -- , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
+  , testCase "B1" $ [] @=? textToLayouts exampleB
+  , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
   -- , testCase "C1" $ [] @=? textToLayouts exampleC
   -- , testCase "C2" $ True @=? (allEq . textToLayouts) exampleC
+  -- , testCase "D1" $ [] @=? textToLayouts exampleD
+  -- , testCase "D2" $ True @=? (allEq . textToLayouts) exampleD
   ]
