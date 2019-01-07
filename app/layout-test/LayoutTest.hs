@@ -72,6 +72,13 @@ exampleD =
   \    six\n\
   \"
 
+exampleE :: Text
+exampleE =
+  "foo\n\
+  \\t\tbar\n\
+  \  \tbaz\n\
+  \"
+
 linesToLayouts :: Delta -> [Text] -> (Delta, [Layout])
 linesToLayouts d0 ls =
   let
@@ -125,6 +132,66 @@ allEq xs =
 newtype Indent = Indent { unIndent :: Int }
   deriving (Eq, Ord, Show)
 
+instance Arbitrary Indent where
+  arbitrary = Indent <$> choose (1, 5)
+  shrink = fmap Indent . shrink . unIndent
+
+data ModelNoDoErrors = 
+    MNDESingleToken Text
+  | MNDEMultiToken [(Int, Text, Text)]
+  | MNDELines [ModelNoDoErrors]
+  deriving (Eq, Ord)
+
+modelNoDoErrorsToText :: ModelNoDoErrors -> Text
+modelNoDoErrorsToText = 
+  modelNoDoErrorsToText' 0
+
+modelNoDoErrorsToText' :: Int -> ModelNoDoErrors -> Text
+modelNoDoErrorsToText' i (MNDESingleToken t) = Text.pack $
+  replicate i ' ' ++ Text.unpack t ++ "\n"
+modelNoDoErrorsToText' i (MNDEMultiToken xs) =  Text.pack $
+  foldMap (\(j, k, t) -> replicate i ' ' ++ Text.unpack k ++ Text.unpack t ++ "\n") xs
+modelNoDoErrorsToText' i (MNDELines xs) = 
+  foldMap (modelNoDoErrorsToText' i) xs
+
+instance Show ModelNoDoErrors where
+  show = Text.unpack . modelNoDoErrorsToText
+
+instance Arbitrary ModelNoDoErrors where
+  arbitrary = 
+    let
+      genSingleToken = 
+        MNDESingleToken <$> elements ["one", "two", "three"]
+      genMultiToken = 
+        let
+          genMT1 = 
+            pure [(0, "", "foo")]
+          genMT2 = do
+            Indent i <- arbitrary
+            pure [(0, "", "foo"), (i, Text.pack $ replicate i ' ', "bar")]
+          genMT3 = do
+            Indent i <- arbitrary
+            Indent j <- arbitrary
+            pure [(0, "", "foo"), (i, Text.pack $ replicate i '\t', "bar"), (i + j, Text.pack $ replicate i ' ' ++ replicate j '\t', "baz")]
+        in
+          MNDEMultiToken <$> oneof [genMT1, genMT2, genMT3]
+      genLines = sized $ \s -> do
+        n <- choose (1, fromIntegral . floor . sqrt . fromIntegral $ s)
+        xs <- sequence . replicate n . resize (s `div` n) $ arbitrary
+        pure $ MNDELines xs
+    in
+      oneof [genSingleToken, genMultiToken, genLines]
+  shrink (MNDESingleToken _) = 
+    []
+  shrink (MNDEMultiToken [x]) = 
+    []
+  shrink (MNDEMultiToken [x,y]) = 
+    [MNDEMultiToken [x]]
+  shrink (MNDEMultiToken [x,y,z]) = 
+    [MNDEMultiToken [x,y]]
+  shrink (MNDELines xs) = 
+    xs ++ (fmap MNDELines . filter (not . null) . shrinkList shrink $ xs)
+
 data Model = 
     SingleToken Text
   | MultiToken [(Int, Text)]
@@ -148,10 +215,6 @@ modelToText' i (Lines xs) =
 
 instance Show Model where
   show = Text.unpack . modelToText
-
-instance Arbitrary Indent where
-  arbitrary = Indent <$> choose (1, 5)
-  shrink = fmap Indent . shrink . unIndent
 
 genSingleToken :: Gen Model
 genSingleToken = 
@@ -206,10 +269,13 @@ test_layout :: TestTree
 test_layout = testGroup "layout"
   [
     testProperty "all eq" $ allEq . textToLayouts . modelToText
+  , testProperty "all eq nde" $ allEq . textToLayouts . modelNoDoErrorsToText
+  , testCase "E1" $ [] @=? textToLayouts exampleE
+  , testCase "E2" $ True @=? (allEq . textToLayouts) exampleE
   -- , testCase "A1" $ [] @=? textToLayouts exampleA
   -- , testCase "A2" $ True @=? (allEq . textToLayouts) exampleA
-  , testCase "B1" $ [] @=? textToLayouts exampleB
-  , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
+  -- , testCase "B1" $ [] @=? textToLayouts exampleB
+  -- , testCase "B2" $ True @=? (allEq . textToLayouts) exampleB
   -- , testCase "C1" $ [] @=? textToLayouts exampleC
   -- , testCase "C2" $ True @=? (allEq . textToLayouts) exampleC
   -- , testCase "D1" $ [] @=? textToLayouts exampleD
