@@ -1,0 +1,10 @@
+signature Parser where
+
+import Dyck
+import Token
+
+data Parsed
+data Tag a
+
+parse :: Dyck -> Parsed
+retrieve :: Parsed -> Tag a -> a
