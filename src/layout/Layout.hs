@@ -18,6 +18,7 @@ import Rev
 import Syntax.Prefix
 
 import Dyck
+import Parser
 
 data LayoutMismatch = LayoutMismatch !Delta !Prefix !Prefix
   deriving (Eq, Show) -- this is for debugging the Layout Monoid
@@ -29,6 +30,10 @@ instance Relative LayoutMismatch where
 -- The second Prefix is the last indent we have seen as we have put this run together
 data Run = Run {-# unpack #-} !Prefix !(Cat Dyck) {-# unpack #-} !Dyck !(Cat LayoutMismatch) !Prefix
   deriving (Eq, Show) -- this is for debugging the Layout Monoid
+
+-- is it guaranteed that all of a `Run` should be parsed the same?
+-- No NonDecreasingIndentation thingamo?
+-- should I ever need to switch between the LayoutMode parsers?
 
 instance Relative Run where
   rel d (Run p ds ts es pr) = Run p (rel d ds) (rel d ts) (rel d es) pr
@@ -76,9 +81,6 @@ instance AsEmpty Layout where
 dyckLayout :: Delta -> Prefix -> Dyck -> Layout
 dyckLayout d _ Empty = E d
 dyckLayout d p t = S d $ Run p [t] t [] p
-
-boring :: Dyck -> Bool
-boring = views dyckLayoutMode (def ==)
 
 -- this should almost certainly be revAppendCat :: Relative a => Cat a -> Cat a -> Cat a
 revCat :: Relative a => Cat a -> Cat a

@@ -27,7 +27,7 @@ import Relative.Class
 import Relative.Delta
 import Language.Server.Protocol (Position(..))
 import qualified Syntax.Lexer as Lex
-import Layout
+import Syntax.Layout
 
 ptxt :: Int -> Text -> Layout
 ptxt n = dyckLayout 0 (Prefix . Text.pack . replicate n $ ' ') . Lex.lex
@@ -122,7 +122,7 @@ allEq xs =
   and $ zipWith (==) xs (tail xs)
 
 
--- The property to target is 
+-- The property to target is
 --   allEq . textToLayouts $ txt
 --
 -- The text would come from one of two models
@@ -136,14 +136,14 @@ instance Arbitrary Indent where
   arbitrary = Indent <$> choose (1, 5)
   shrink = fmap Indent . shrink . unIndent
 
-data ModelNoDoErrors = 
+data ModelNoDoErrors =
     MNDESingleToken Text
   | MNDEMultiToken [(Int, Text, Text)]
   | MNDELines [ModelNoDoErrors]
   deriving (Eq, Ord)
 
 modelNoDoErrorsToText :: ModelNoDoErrors -> Text
-modelNoDoErrorsToText = 
+modelNoDoErrorsToText =
   modelNoDoErrorsToText' 0
 
 modelNoDoErrorsToText' :: Int -> ModelNoDoErrors -> Text
@@ -151,20 +151,20 @@ modelNoDoErrorsToText' i (MNDESingleToken t) = Text.pack $
   replicate i ' ' ++ Text.unpack t ++ "\n"
 modelNoDoErrorsToText' i (MNDEMultiToken xs) =  Text.pack $
   foldMap (\(j, k, t) -> replicate i ' ' ++ Text.unpack k ++ Text.unpack t ++ "\n") xs
-modelNoDoErrorsToText' i (MNDELines xs) = 
+modelNoDoErrorsToText' i (MNDELines xs) =
   foldMap (modelNoDoErrorsToText' i) xs
 
 instance Show ModelNoDoErrors where
   show = Text.unpack . modelNoDoErrorsToText
 
 instance Arbitrary ModelNoDoErrors where
-  arbitrary = 
+  arbitrary =
     let
-      genSingleToken = 
+      genSingleToken =
         MNDESingleToken <$> elements ["one", "two", "three"]
-      genMultiToken = 
+      genMultiToken =
         let
-          genMT1 = 
+          genMT1 =
             pure [(0, "", "foo")]
           genMT2 = do
             Indent i <- arbitrary
@@ -181,18 +181,18 @@ instance Arbitrary ModelNoDoErrors where
         pure $ MNDELines xs
     in
       oneof [genSingleToken, genMultiToken, genLines]
-  shrink (MNDESingleToken _) = 
+  shrink (MNDESingleToken _) =
     []
-  shrink (MNDEMultiToken [x]) = 
+  shrink (MNDEMultiToken [x]) =
     []
-  shrink (MNDEMultiToken [x,y]) = 
+  shrink (MNDEMultiToken [x,y]) =
     [MNDEMultiToken [x]]
-  shrink (MNDEMultiToken [x,y,z]) = 
+  shrink (MNDEMultiToken [x,y,z]) =
     [MNDEMultiToken [x,y]]
-  shrink (MNDELines xs) = 
+  shrink (MNDELines xs) =
     xs ++ (fmap MNDELines . filter (not . null) . shrinkList shrink $ xs)
 
-data Model = 
+data Model =
     SingleToken Text
   | MultiToken [(Int, Text)]
   | Do Int [Model]
@@ -200,7 +200,7 @@ data Model =
   deriving (Eq, Ord)
 
 modelToText :: Model -> Text
-modelToText = 
+modelToText =
   modelToText' 0
 
 modelToText' :: Int -> Model -> Text
@@ -210,20 +210,20 @@ modelToText' i (MultiToken xs) =  Text.pack $
   foldMap (\(j, t) -> replicate (i + j) ' ' ++ Text.unpack t ++ "\n") xs
 modelToText' i (Do j xs) = Text.pack $
   replicate i ' ' ++ "do\n" ++ Text.unpack (foldMap (modelToText' (i + j)) xs)
-modelToText' i (Lines xs) = 
+modelToText' i (Lines xs) =
   foldMap (modelToText' i) xs
 
 instance Show Model where
   show = Text.unpack . modelToText
 
 genSingleToken :: Gen Model
-genSingleToken = 
+genSingleToken =
   SingleToken <$> elements ["one", "two", "three"]
 
 genMultiToken :: Gen Model
-genMultiToken = 
+genMultiToken =
   let
-    genMT1 = 
+    genMT1 =
       pure [(0, "foo")]
     genMT2 = do
       Indent i <- arbitrary
@@ -249,20 +249,20 @@ genLines = sized $ \s -> do
   pure $ Lines xs
 
 instance Arbitrary Model where
-  arbitrary = 
+  arbitrary =
     -- oneof [genSingleToken, genMultiToken, genLines]
     oneof [genSingleToken, genMultiToken, genDo, genLines]
-  shrink (SingleToken _) = 
+  shrink (SingleToken _) =
     []
-  shrink (MultiToken [x]) = 
+  shrink (MultiToken [x]) =
     []
-  shrink (MultiToken [x,y]) = 
+  shrink (MultiToken [x,y]) =
     [MultiToken [x]]
-  shrink (MultiToken [x,y,z]) = 
+  shrink (MultiToken [x,y,z]) =
     [MultiToken [x,y]]
-  shrink (Do i xs) = 
+  shrink (Do i xs) =
     xs ++ (fmap (Do i) . filter (not . null) . shrinkList shrink $ xs)
-  shrink (Lines xs) = 
+  shrink (Lines xs) =
     xs ++ (fmap Lines . filter (not . null) . shrinkList shrink $ xs)
 
 test_layout :: TestTree

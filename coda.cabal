@@ -72,12 +72,14 @@ common lens-aeson           { build-depends: lens-aeson ^>= 1.0.2 }
 common mtl                  { build-depends: mtl ^>= 2.2.1 }
 common nats                 { build-depends: nats >= 1.1.1 && < 2 }
 common optparse-applicative { build-depends: optparse-applicative }
+common parsec               { build-depends: parsec }
+common parsers              { build-depends: parsers }
 common profunctors          { build-depends: profunctors ^>= 5.2 }
 common reflection           { build-depends: reflection }
 common tagged               { build-depends: tagged }
 common template-haskell     { build-depends: template-haskell >= 2.12 && < 2.15 }
 common text                 { build-depends: text ^>= 1.2 }
-common transformers         { build-depends: transformers }
+common transformers         { build-depends: transformers ^>= 0.5.0.0 }
 common unordered-containers { build-depends: unordered-containers ^>= 0.2 }
 common uri-encode           { build-depends: uri-encode ^>= 1.5.0.5 }
 
@@ -213,26 +215,28 @@ library summary-unit
 library parser
   import: base
   hs-source-dirs: src/parser
-  build-depends: algebra, common, lexer, reflection
+  build-depends: algebra, common, data-default, lens, lexer, parsec, reflection
   exposed-modules: Syntax.Parser
 
 library layout
   import: base, data-default, lens
   hs-source-dirs: src/layout
-  build-depends: algebra, common, dyck, reflection
-  signatures: Parser
+  build-depends: algebra, common, lens, reflection
+  signatures: Dyck Parser
   exposed-modules: Layout
 
 library syntax
   import: base
   hs-source-dirs: src/syntax
-  build-depends: common, lexer, rope, summary-unit
+  build-depends: common, layout, lexer, parser, rope, summary-unit
 
   mixins:
     summary-unit (Summary as Syntax.Summary)
       requires (Dyck as Syntax.Dyck),
     rope (Document as Syntax.Document, Rope as Syntax.Rope)
-      requires (Dyck as Syntax.Dyck, Lexer as Syntax.Lexer, Summary as Syntax.Summary)
+      requires (Dyck as Syntax.Dyck, Lexer as Syntax.Lexer, Summary as Syntax.Summary),
+    layout (Layout as Syntax.Layout)
+      requires (Parser as Syntax.Parser, Dyck as Syntax.Dyck),
 
   reexported-modules:
     Syntax.Alex,
@@ -244,20 +248,10 @@ library syntax
     Syntax.Prefix,
     Syntax.Rope,
     Syntax.Summary,
-    Syntax.Token
+    Syntax.Token,
+    Syntax.Layout
 
   other-modules: Syntax
-
-library layout-test-helper
-  import: base
-  hs-source-dirs: src/layout-test
-  build-depends: token, dyck, layout
-  mixins:
-    dyck requires (Token as Syntax.Token),
-    layout requires (Token as Syntax.Token)
-  other-modules: LayoutTest
-  reexported-modules:
-    Layout
 
 library set
   import: base, data-default, deepseq, lens
@@ -332,11 +326,11 @@ executable llvm-test
   hs-source-dirs: app/llvm-test
   main-is: Main.hs
 
-executable codex
-  import: app, base, optparse-applicative
-  build-depends: common, console, server, version
-  hs-source-dirs: app/codex
-  main-is: Main.hs
+-- executable codex
+--   import: app, base, optparse-applicative
+--   build-depends: common, console, server, version
+--   hs-source-dirs: app/codex
+--   main-is: Main.hs
 
 test-suite lsp-test
   import: aeson, app, base, bifunctors, bytestring, containers, filepath,
@@ -366,13 +360,13 @@ test-suite layout-test
           lens, tagged, text
   main-is: Main.hs
   type: exitcode-stdio-1.0
-  hs-source-dirs: app/layout-test
+  hs-source-dirs: app/layout-test, src/layout-test
   autogen-modules: Paths_coda
   other-modules:
     Paths_coda
     LayoutTest
   build-tool-depends: tasty-discover:tasty-discover >= 3.0 && < 4.3
-  build-depends: common, algebra, syntax, lsp, layout-test-helper
+  build-depends: common, algebra, syntax, lsp
   build-depends:
     QuickCheck,
     tasty >= 0.11,
