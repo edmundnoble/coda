@@ -326,11 +326,11 @@ executable llvm-test
   hs-source-dirs: app/llvm-test
   main-is: Main.hs
 
--- executable codex
---   import: app, base, optparse-applicative
---   build-depends: common, console, server, version
---   hs-source-dirs: app/codex
---   main-is: Main.hs
+executable codex
+  import: app, base, optparse-applicative
+  build-depends: common, console, server, version
+  hs-source-dirs: app/codex
+  main-is: Main.hs
 
 test-suite lsp-test
   import: aeson, app, base, bifunctors, bytestring, containers, filepath,

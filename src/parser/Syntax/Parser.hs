@@ -21,7 +21,7 @@ newtype TokenStream = TokenStream (Cat Token)
 
 instance Monad m => Stream TokenStream m Token where
   uncons (TokenStream c) =
-    pure $ over (_Just._2) TokenStream $ Control.Lens.uncons c
+    pure . over (_Just._2) TokenStream $ Control.Lens.uncons c
 
 data Parsed = Parsed
   { parsedTopLevel :: OrErrs TopLevel TopLevelErr
