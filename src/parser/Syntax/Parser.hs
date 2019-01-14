@@ -43,10 +43,16 @@ type TokParser m a = ParsecT TokenStream () m a
 -- this would be that the `doParser` doesn't parse the `do` token!
 -- ask Ed to elaborate on the syntax plans
 
+-- Ed has elaborated. It looks like for now it's nice to use this:
+data P = P Dyck Parsed
+
+instance Semigroup P where
+  (P d _) (P d' _) = let d'' = d <> d' in P d'' (parse d'')
+
 -- a systematic way to ignore comments?
 -- a syntax for pragmas?
 
--- Cat Dycks are NOT just lines, but candidates to become statements
+-- Cat Dycks are NOT just lines, but candidates to become statements(!!!!!)
 parseDyck :: Monad m => TokParser m a -> Dyck -> m (Either ParseError a)
 parseDyck p (Dyck _ _ _ s _ _) = runParserT p () "" (TokenStream s)
 
