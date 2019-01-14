@@ -15,11 +15,12 @@ import Syntax.Dyck
 import Syntax.Token
 import Relative.Cat
 
-import Text.Parsec.Prim
+import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Error(ParseError)
 
 newtype TokenStream = TokenStream (Cat Token)
 
+-- how am I going to deal with dyck language stuff, do I need to?
 instance Monad m => Stream TokenStream m Token where
   uncons (TokenStream c) =
     pure . over (_Just._2) TokenStream $ Control.Lens.uncons c
@@ -47,26 +48,26 @@ type TokParser m a = ParsecT TokenStream () m a
 data P = P Dyck Parsed
 
 instance Semigroup P where
-  (P d _) (P d' _) = let d'' = d <> d' in P d'' (parse d'')
+  (P d _) <> (P d' _) = let d'' = d <> d' in P d'' (parse d'')
 
 -- a systematic way to ignore comments?
 -- a syntax for pragmas?
 
--- Cat Dycks are NOT just lines, but candidates to become statements(!!!!!)
+-- Dycks are NOT just lines, but candidates to become statements(!!!!!)
 parseDyck :: Monad m => TokParser m a -> Dyck -> m (Either ParseError a)
 parseDyck p (Dyck _ _ _ s _ _) = runParserT p () "" (TokenStream s)
 
-type OrErrs a e = (Maybe a, Cat e)
+type OrErrs a e = Either (Cat e) a
 
 data Tag a e where
   TagTopLevel     :: Tag TopLevel TopLevelErr
   TagDo           :: Tag Do DoErr
   TagLet          :: Tag Let LetErr
   TagWhere        :: Tag Where WhereErr
-  TagCase         :: Tag Case CaseErr
-  TagClass        :: Tag Class ClassErr
-  TagInstance     :: Tag Instance InstanceErr
-  TagModuleHeader :: Tag ModuleHeader ModuleHeaderErr
+  -- TagCase         :: Tag Case CaseErr
+  -- TagClass        :: Tag Class ClassErr
+  -- TagInstance     :: Tag Instance InstanceErr
+  -- TagModuleHeader :: Tag ModuleHeader ModuleHeaderErr
 
 data CAFDeclInfo = CAFDeclInfo
 data DataDeclInfo = DataDeclInfo
@@ -101,28 +102,30 @@ data TopLevelErr
 exprParser :: Monad m => TokParser m Expr
 exprParser = pure undefined
 
-patParser
+patParser :: Monad m => TokParser m Pat
+patParser = pure undefined
 
 parseExpr :: Dyck -> OrErrs Expr ExprErr
-parseExpr _ = (Nothing, def)
+parseExpr _ = undefined
 
 parseTopLevel :: Dyck -> OrErrs TopLevel TopLevelErr
-parseTopLevel _ = (Nothing, def)
+parseTopLevel _ = undefined
 
 parseDo :: Dyck -> OrErrs Do DoErr
-parseDo _ = (Nothing, def)
+parseDo _ = undefined
 
 parseLet :: Dyck -> OrErrs Let LetErr
-parseLet _ = (Nothing, def)
+parseLet _ = undefined
 
 parseWhere :: Dyck -> OrErrs Where WhereErr
-parseWhere _ = (Nothing, def)
+parseWhere _ = undefined
 
 parse :: Dyck -> Parsed
 parse d = Parsed (parseTopLevel d) (parseDo d) (parseLet d) (parseWhere d)
 
-retrieve :: Parsed -> Tag a -> a
-retrieve d TagTopLevel = parsedTopLevel d
-retrieve d TagDo       = parsedDo d
-retrieve d TagLet      = parsedLet d
-retrieve d TagWhere    = parsedWhere d
+retrieve :: Parsed -> Tag a e -> Either e a
+retrieve _ = undefined
+-- retrieve d TagTopLevel = parsedTopLevel d
+-- retrieve d TagDo       = parsedDo d
+-- retrieve d TagLet      = parsedLet d
+-- retrieve d TagWhere    = parsedWhere d
