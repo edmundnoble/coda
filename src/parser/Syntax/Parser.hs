@@ -16,6 +16,7 @@ import Syntax.Token
 import Relative.Cat
 
 import Text.Parsec.Prim
+import Text.Parsec.Error(ParseError)
 
 newtype TokenStream = TokenStream (Cat Token)
 
@@ -30,35 +31,56 @@ data Parsed = Parsed
   , parsedWhere    :: OrErrs Where WhereErr
   }
 
--- type TokParser = ParsecT
+type TokParser m a = ParsecT TokenStream () m a
 
--- runParser :: Parser
+-- I'm pretty sure parsec's ParseError has completely broken source info, and
+-- even if it weren't we have better info ourselves which we'll provide when
+-- we're using a better parser "library"
+-- we don't care about sourcenames for this reason.
+
+-- also, is it accurate to call what we're making an "abstract syntax tree" when
+-- we're only producing "levels" of the tree at a time? one odd consequence of
+-- this would be that the `doParser` doesn't parse the `do` token!
+-- ask Ed to elaborate on the syntax plans
+
+-- a systematic way to ignore comments?
+-- a syntax for pragmas?
+
+-- Cat Dycks are NOT just lines, but candidates to become statements
+parseDyck :: Monad m => TokParser m a -> Dyck -> m (Either ParseError a)
+parseDyck p (Dyck _ _ _ s _ _) = runParserT p () "" (TokenStream s)
 
 type OrErrs a e = (Maybe a, Cat e)
 
-data Tag a where
-  TagTopLevel  :: Tag (OrErrs TopLevel TopLevelErr)
-  TagDo        :: Tag (OrErrs Do DoErr)
-  TagLet       :: Tag (OrErrs Let LetErr)
-  TagWhere     :: Tag (OrErrs Where WhereErr)
+data Tag a e where
+  TagTopLevel     :: Tag TopLevel TopLevelErr
+  TagDo           :: Tag Do DoErr
+  TagLet          :: Tag Let LetErr
+  TagWhere        :: Tag Where WhereErr
+  TagCase         :: Tag Case CaseErr
+  TagClass        :: Tag Class ClassErr
+  TagInstance     :: Tag Instance InstanceErr
+  TagModuleHeader :: Tag ModuleHeader ModuleHeaderErr
 
 data CAFDeclInfo = CAFDeclInfo
 data DataDeclInfo = DataDeclInfo
+
+data Pat
 
 data TyName = TyName
 data TermName = TermName
 
 data Expr = ExprDo Do | ExprLet Let | ExprWhere Where
-data ExprErr
+type ExprErr = ParseError
 
 data Do = Do [DoStatement]
-data DoErr
+type DoErr = ParseError
 
 data Let
-data LetErr
+type LetErr = ParseError
 
 data Where
-data WhereErr
+type WhereErr = ParseError
 
 data Purity = Pure | Impure
 
@@ -69,6 +91,11 @@ data TopLevel
   | DataDecl DataDeclInfo
   | TypeAlias TyName TyName
 data TopLevelErr
+
+exprParser :: Monad m => TokParser m Expr
+exprParser = pure undefined
+
+patParser
 
 parseExpr :: Dyck -> OrErrs Expr ExprErr
 parseExpr _ = (Nothing, def)

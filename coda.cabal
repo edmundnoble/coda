@@ -249,7 +249,8 @@ library syntax
     Syntax.Rope,
     Syntax.Summary,
     Syntax.Token,
-    Syntax.Layout
+    Syntax.Layout,
+    Syntax.Parser
 
   other-modules: Syntax
 
