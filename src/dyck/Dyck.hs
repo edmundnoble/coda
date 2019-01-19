@@ -79,12 +79,9 @@ data Closing = Closing !(Cat Token) {-# unpack #-} !LocatedPair
 data Dyck
   = Dyck
     !(Cat Closing)
-    -- do I parse this?
     !(Cat Token)
     !(Rev Cat Opening)
-    -- or this?
     !(Cat Token)
-    -- or whichever isn't empty?
     !LayoutMode
     !(Cat MismatchError) -- errors
   deriving (Generic, Show, Eq, Ord, Read)

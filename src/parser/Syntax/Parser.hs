@@ -13,8 +13,12 @@ import Data.Default
 
 import Syntax.Dyck
 import Syntax.Token
-import Relative.Cat
+import Relative.Cat(Cat)
+import Rev(Rev(..))
 
+import qualified Relative.Cat as Cat
+
+import qualified Text.Parsec.Pos
 import Text.Parsec.Prim hiding (parse)
 import Text.Parsec.Error(ParseError)
 
@@ -26,23 +30,22 @@ instance Monad m => Stream TokenStream m Token where
     pure . over (_Just._2) TokenStream $ Control.Lens.uncons c
 
 data Parsed = Parsed
-  { parsedTopLevel :: OrErrs TopLevel TopLevelErr
-  , parsedDo       :: OrErrs Do DoErr
-  , parsedLet      :: OrErrs Let LetErr
-  , parsedWhere    :: OrErrs Where WhereErr
-  }
+  { parsedTopLevel :: Maybe TopLevel
+  } deriving Show
 
-type TokParser m a = ParsecT TokenStream () m a
+type TokParser a = ParsecT TokenStream () Identity a
 
 -- I'm pretty sure parsec's ParseError has completely broken source info, and
 -- even if it weren't we have better info ourselves which we'll provide when
--- we're using a better parser "library"
--- we don't care about sourcenames for this reason.
+-- we're using a better parser "library" we don't care about sourcenames for
+-- this reason.
 
 -- also, is it accurate to call what we're making an "abstract syntax tree" when
 -- we're only producing "levels" of the tree at a time? one odd consequence of
--- this would be that the `doParser` doesn't parse the `do` token!
--- ask Ed to elaborate on the syntax plans
+-- this would be that the `doParser` doesn't parse the `do` token! ask Ed to
+-- elaborate on the syntax plans
+
+-- looks like that last paragraph was complete bollocks
 
 -- Ed has elaborated. It looks like for now it's nice to use this:
 data P = P Dyck Parsed
@@ -54,77 +57,94 @@ instance Semigroup P where
 -- a syntax for pragmas?
 
 -- Dycks are NOT just lines, but candidates to become statements(!!!!!)
-parseDyck :: Monad m => TokParser m a -> Dyck -> m (Either ParseError a)
-parseDyck p (Dyck _ _ _ s _ _) = runParserT p () "" (TokenStream s)
 
-type OrErrs a e = Either (Cat e) a
+-- perhaps instantiate `ParsecT s u m` in a way which gives us parser errors
+-- before swapping to a better parser?
+-- seems impossible.
+parseDyck :: TokParser a -> Dyck -> Maybe a
+-- for now we eagerly fail if there are mismatched parens/braces/brackets.
+parseDyck p (Dyck o s (Rev c) e _ _) | Cat.null o && Cat.null c
+  = eitherToMaybe . runIdentity $ runParserT p () "" (TokenStream (s <> e))
+  where
+    eitherToMaybe = either (const Nothing) Just
+parseDyck _ (Dyck _ _ _ _ _ _) = Nothing
 
-data Tag a e where
-  TagTopLevel     :: Tag TopLevel TopLevelErr
-  TagDo           :: Tag Do DoErr
-  TagLet          :: Tag Let LetErr
-  TagWhere        :: Tag Where WhereErr
-  -- TagCase         :: Tag Case CaseErr
-  -- TagClass        :: Tag Class ClassErr
-  -- TagInstance     :: Tag Instance InstanceErr
-  -- TagModuleHeader :: Tag ModuleHeader ModuleHeaderErr
+data Tag a where
+  TagTopLevel     :: Tag TopLevel
+  TagDo           :: Tag Do
+  TagLet          :: Tag Let
+  TagWhere        :: Tag Where
+  TagCase         :: Tag CaseBody
+  TagClass        :: Tag ClassBody
+  TagInstance     :: Tag InstanceBody
+
+instance Show (Tag a) where
+  show TagTopLevel     = "Tag TopLevel"
+  show TagDo           = "Tag Do"
+  show TagLet          = "Tag Let"
+  show TagWhere        = "Tag Where"
+  show TagCase         = "Tag Case"
+  show TagClass        = "Tag Class"
+  show TagInstance     = "Tag Instance"
 
 data CAFDeclInfo = CAFDeclInfo
+  deriving Show
 data DataDeclInfo = DataDeclInfo
+  deriving Show
 
 data Pat
 
-data TyName = TyName
-data TermName = TermName
+data CaseBody
+
+data ClassBody
+
+data InstanceBody
+
+data ModuleHeader
+
+tokenPos :: Text.Parsec.Pos.SourcePos -> Token -> Text.Parsec.Pos.SourcePos
+tokenPos t = Text.Parsec.Pos.newPos "" 0 t
+
+data TyName = TyName deriving Show
+data TermName = TermName deriving Show
 
 data Expr = ExprDo Do | ExprLet Let | ExprWhere Where
-type ExprErr = ParseError
+  deriving Show
 
-data Do = Do [DoStatement]
-type DoErr = ParseError
+data Do = Do [DoStatement] deriving Show
 
-data Let
-type LetErr = ParseError
+data Let = Let deriving Show
 
-data Where
-type WhereErr = ParseError
+data Where = Where deriving Show
 
 data Purity = Pure | Impure
+  deriving Show
 
 data DoStatement = DoStatement (Maybe TermName) Purity Expr
+  deriving Show
 
 data TopLevel
-  = CAFDecl TermName CAFDeclInfo Expr
-  | DataDecl DataDeclInfo
+  = Defn TermName CAFDeclInfo Expr
+  | Data DataDeclInfo
   | TypeAlias TyName TyName
-data TopLevelErr
+  deriving Show
 
-exprParser :: Monad m => TokParser m Expr
+topLevelParser :: TokParser TopLevel
+topLevelParser = pure undefined
+
+exprParser :: TokParser Expr
 exprParser = pure undefined
 
-patParser :: Monad m => TokParser m Pat
+patParser ::  TokParser Pat
 patParser = pure undefined
 
-parseExpr :: Dyck -> OrErrs Expr ExprErr
-parseExpr _ = undefined
-
-parseTopLevel :: Dyck -> OrErrs TopLevel TopLevelErr
-parseTopLevel _ = undefined
-
-parseDo :: Dyck -> OrErrs Do DoErr
-parseDo _ = undefined
-
-parseLet :: Dyck -> OrErrs Let LetErr
-parseLet _ = undefined
-
-parseWhere :: Dyck -> OrErrs Where WhereErr
-parseWhere _ = undefined
-
 parse :: Dyck -> Parsed
-parse d = Parsed (parseTopLevel d) (parseDo d) (parseLet d) (parseWhere d)
+parse d = Parsed (parseDyck topLevelParser d)
 
-retrieve :: Parsed -> Tag a e -> Either e a
-retrieve _ = undefined
+retrieve :: Parsed -> Tag a -> Maybe a
+retrieve p TagTopLevel = parsedTopLevel p
+retrieve _ tag = error $ "unimplemented parser for tag " ++ show tag
+
 -- retrieve d TagTopLevel = parsedTopLevel d
 -- retrieve d TagDo       = parsedDo d
 -- retrieve d TagLet      = parsedLet d

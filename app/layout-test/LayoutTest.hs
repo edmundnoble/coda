@@ -36,6 +36,9 @@ ptxt n = dyckLayout 0 (Prefix . Text.pack . replicate n $ ' ') . Lex.lex
 txt :: Text -> Layout
 txt = dyckLayout 0 (Prefix "") . Lex.lex
 
+parse :: Text -> Parse.Parsed
+parse = Parse.parse . Lex.lex
+
 -- 23 overall
 -- 4 / 13 / 25
 

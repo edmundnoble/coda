@@ -3,7 +3,7 @@ signature Parser where
 import Dyck
 
 data Parsed
-data Tag a e
+data Tag a
 
 parse :: Dyck -> Parsed
-retrieve :: Parsed -> Tag a e -> Either e a
+retrieve :: Parsed -> Tag a -> Maybe a
