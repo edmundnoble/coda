@@ -32,7 +32,6 @@ module Syntax.Token
   , unmatchedOpening
   , unmatchedClosing
   , lexicalError
-  , reifyLayoutMode
   ) where
 
 import Data.Data
@@ -142,19 +141,6 @@ data Pair = Brace | Bracket | Paren
 
 data LayoutMode = LNone | LDo | LLet | LOf | LWhere
   deriving (Eq,Ord,Show,Read)
-
-instance Reifies 'LNone LayoutMode where reflect _ = LNone
-instance Reifies 'LDo LayoutMode where reflect _ = LDo
-instance Reifies 'LLet LayoutMode where reflect _ = LLet
-instance Reifies 'LOf LayoutMode where reflect _ = LOf
-instance Reifies 'LWhere LayoutMode where reflect _ = LWhere
-
-reifyLayoutMode :: LayoutMode -> (forall (s :: LayoutMode). Reifies s LayoutMode => Proxy s -> r) -> r
-reifyLayoutMode LNone f = f (Proxy :: Proxy 'LNone)
-reifyLayoutMode LDo f = f (Proxy :: Proxy 'LDo)
-reifyLayoutMode LLet f = f (Proxy :: Proxy 'LLet)
-reifyLayoutMode LOf f = f (Proxy :: Proxy 'LOf)
-reifyLayoutMode LWhere f = f (Proxy :: Proxy 'LWhere)
 
 instance Default LayoutMode where
   def = LNone
