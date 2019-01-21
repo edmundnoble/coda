@@ -213,7 +213,7 @@ library summary-unit
   build-depends: common
 
 library parser
-  import: base
+  import: base, text
   hs-source-dirs: src/parser
   build-depends: algebra, common, data-default, lens, lexer, parsec, reflection
   exposed-modules: Syntax.Parser
