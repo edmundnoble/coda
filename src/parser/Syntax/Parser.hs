@@ -15,7 +15,6 @@ module Syntax.Parser where
 import Control.Applicative((<|>), some)
 import Control.Lens
 import Control.Monad(guard)
-import Data.Default
 import Data.Functor(($>))
 import Data.Text(Text)
 
@@ -38,6 +37,9 @@ newtype TokenStream = TokenStream (Cat Token)
 instance Monad m => Stream TokenStream m Token where
   uncons (TokenStream c) =
     pure . over (_Just._2) TokenStream $ Control.Lens.uncons c
+
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe = either (const Nothing) Just
 
 data Parsed = Parsed
   { parsedTopLevel :: Maybe TopLevel
@@ -78,8 +80,6 @@ parseDyck :: TokParser a -> Dyck -> Maybe a
 -- for now we eagerly fail if there are mismatched parens/braces/brackets.
 parseDyck p (Dyck o s (Rev c) e _ _) | Cat.null o && Cat.null c
   = eitherToMaybe $ runParser p () "" (TokenStream (s <> e))
-  where
-    eitherToMaybe = either (const Nothing) Just
 parseDyck _ (Dyck _ _ _ _ _ _) = Nothing
 
 data Tag a where
@@ -102,6 +102,7 @@ instance Show (Tag a) where
 
 data CAFDeclInfo = CAFDeclInfo
   deriving Show
+
 data DataDeclInfo = DataDeclInfo
   deriving Show
 
@@ -159,7 +160,13 @@ satisfy ::
   (Token -> Bool) -> ParsecT TokenStream u m Token
 satisfy f = opt (\t -> guard (f t) $> t)
 
-data Expr = EDo Do | ELet Let | EWhere Where | ELam Name Expr | EIdent Name
+data Expr
+  = EDo Do
+  | ELet Pat Expr Expr
+  | EWhere Where
+  | ELam Pat Expr
+  | EIdent Name
+  | EApp Expr Expr
   deriving Show
 
 data Do = Do [DoStatement] deriving Show
@@ -191,19 +198,34 @@ doStmtP = pur <|> impur
   pur = flip DoStatement Pure <$> (keyword KLet *> (Just <$> patP) <* rawTok "=") <*> exprP
   impur = flip DoStatement Impure <$> (optionMaybe patP <* rawTok "<-") <*> exprP
 
--- prime candidate for applicative parser composition
+-- this is *very* broken.
+inParens :: TokParser a -> TokParser a
+inParens p = opt $ \case
+  TokenNested Paren _ ts _ ->
+    eitherToMaybe $ runParser p () "" (TokenStream ts)
+  _ -> Nothing
+
+-- greedily searching for a paren on the right.
 exprP :: TokParser Expr
-exprP = lamP <|> letP <|> try appP <|> try (EIdent <$> identP)
+exprP
+  = lamP <|> letP <|> inParens exprP <|> appOrIdentP
   where
-  appP = undefined -- EApp <$> exprP <*> exprP
-  lamP = ELam <$> (rawTok "\\" *> identP) <*> (rawTok "->" *> exprP)
-  letP = undefined
+  appOrIdentP = do
+    i <- identP
+    try (EApp (EIdent i) <$> exprP) <|> pure (EIdent i)
+  lamP = ELam <$>
+    (rawTok "\\" *> patP) <*>
+    (rawTok "->" *> exprP)
+  letP = ELet <$>
+    (keyword KLet *> patP) <*>
+    (rawTok "=" *> exprP) <*>
+    (keyword KIn *> exprP)
 
 patP ::  TokParser Pat
 patP = Pat <$> identP
 
 doP :: TokParser Do
-doP = keyword KDo *> (Do <$> some doStmtP)
+doP = Do <$> (keyword KDo *> some doStmtP)
 
 parse :: Dyck -> Parsed
 parse d = Parsed (parseDyck topLevelP d)
