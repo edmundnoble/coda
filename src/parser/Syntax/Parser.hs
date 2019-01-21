@@ -12,10 +12,11 @@
 
 module Syntax.Parser where
 
-import Control.Applicative((<|>), some)
+import Control.Applicative((<|>), liftA2, some)
 import Control.Lens
 import Control.Monad(guard)
-import Data.Functor(($>))
+import Data.Bifunctor(first)
+import Data.Functor(($>), void)
 import Data.Text(Text)
 
 import Syntax.Dyck
@@ -28,7 +29,8 @@ import Rev(Rev(..))
 import qualified Relative.Cat as Cat
 
 import qualified Text.Parsec.Pos
-import Text.Parsec.Combinator(optionMaybe)
+import Text.Parsec.Combinator(option, sepBy, sepBy1, sepEndBy1)
+import Text.Parsec.Error(ParseError)
 import Text.Parsec.Prim(ParsecT, Stream(..), runParser, tokenPrim, try)
 
 newtype TokenStream = TokenStream (Cat Token)
@@ -43,6 +45,7 @@ eitherToMaybe = either (const Nothing) Just
 
 data Parsed = Parsed
   { parsedTopLevel :: Maybe TopLevel
+  , parsedDo :: Maybe Do
   } deriving Show
 
 type TokParser a = ParsecT TokenStream () Identity a
@@ -76,11 +79,11 @@ instance Semigroup P where
 -- perhaps instantiate `ParsecT s u m` in a way which gives us parser errors
 -- before swapping to a better parser?
 -- seems impossible.
-parseDyck :: TokParser a -> Dyck -> Maybe a
--- for now we eagerly fail if there are mismatched parens/braces/brackets.
+parseDyck :: TokParser a -> Dyck -> Either (Maybe ParseError) a
 parseDyck p (Dyck o s (Rev c) e _ _) | Cat.null o && Cat.null c
-  = eitherToMaybe $ runParser p () "" (TokenStream (s <> e))
-parseDyck _ (Dyck _ _ _ _ _ _) = Nothing
+  = first Just $ runParser p () "" (TokenStream (s <> e))
+-- for now we eagerly fail if there are mismatched parens/braces/brackets.
+parseDyck _ (Dyck _ _ _ _ _ _) = Left Nothing
 
 data Tag a where
   TagTopLevel     :: Tag TopLevel
@@ -122,6 +125,7 @@ tokenPos ::
 tokenPos _ (delta -> Delta x) _
   = Text.Parsec.Pos.newPos "" 0 x
 
+-- for now, `Token` denotes what are called in Haskell "symbolic keywords"
 rawTok ::
   Monad m =>
   Text -> ParsecT TokenStream u m ()
@@ -167,6 +171,7 @@ data Expr
   | ELam Pat Expr
   | EIdent Name
   | EApp Expr Expr
+  | ETuple [Expr]
   deriving Show
 
 data Do = Do [DoStatement] deriving Show
@@ -185,30 +190,26 @@ data TopLevel
   = TySig Name Expr
   | Defn Name CAFDeclInfo Expr
   | Data DataDeclInfo
-  -- invariant: LHS of a type alias must be unqualified
   | TyAlias Name Name
   deriving Show
 
 topLevelP :: TokParser TopLevel
 topLevelP = undefined
 
-doStmtP :: TokParser DoStatement
-doStmtP = pur <|> impur
-  where
-  pur = flip DoStatement Pure <$> (keyword KLet *> (Just <$> patP) <* rawTok "=") <*> exprP
-  impur = flip DoStatement Impure <$> (optionMaybe patP <* rawTok "<-") <*> exprP
-
--- this is *very* broken.
+-- this looks *very* broken.
 inParens :: TokParser a -> TokParser a
 inParens p = opt $ \case
   TokenNested Paren _ ts _ ->
     eitherToMaybe $ runParser p () "" (TokenStream ts)
   _ -> Nothing
 
--- greedily searching for a paren on the right.
 exprP :: TokParser Expr
 exprP
-  = lamP <|> letP <|> inParens exprP <|> appOrIdentP
+  = (EDo <$> doP) <|>
+    lamP <|>
+    letP <|>
+    inParens (exprP <|> tupleP) <|>
+    appOrIdentP
   where
   appOrIdentP = do
     i <- identP
@@ -220,21 +221,34 @@ exprP
     (keyword KLet *> patP) <*>
     (rawTok "=" *> exprP) <*>
     (keyword KIn *> exprP)
+  tupleP = ETuple <$> sepBy exprP (rawTok ",")
 
 patP ::  TokParser Pat
 patP = Pat <$> identP
 
+doStmtP :: TokParser DoStatement
+doStmtP
+  = try (pur <|> impur) <*> exprP <|> DoStatement Nothing Impure <$> exprP
+  where
+  pur = flip DoStatement Pure <$> (keyword KLet *> (Just <$> patP) <* rawTok "=")
+  impur = flip DoStatement Impure <$> (Just <$> patP <* rawTok "<-")
+
+-- this doesn't work; we have no idea how to denote multiple
+-- statements. We need a Cat Dyck or Free Cat Dyck or something.
 doP :: TokParser Do
-doP = Do <$> (keyword KDo *> some doStmtP)
+doP
+  = keyword KDo *> fmap Do (sepBy1 doStmtP (option () (void $ rawTok ";")))
 
 parse :: Dyck -> Parsed
-parse d = Parsed (parseDyck topLevelP d)
+parse = let
+  parseTopLevel = parseDyck topLevelP
+  parseDo = parseDyck doP in
+  Parsed <$> (eitherToMaybe . parseTopLevel) <*> (eitherToMaybe . parseDo)
 
 retrieve :: Parsed -> Tag a -> Maybe a
 retrieve p TagTopLevel = parsedTopLevel p
-retrieve _ tag = error $ "unimplemented parser for tag " ++ show tag
-
 -- retrieve d TagTopLevel = parsedTopLevel d
--- retrieve d TagDo       = parsedDo d
+retrieve p TagDo       = parsedDo p
 -- retrieve d TagLet      = parsedLet d
 -- retrieve d TagWhere    = parsedWhere d
+retrieve _ tag = error $ "unimplemented parser for tag " ++ show tag

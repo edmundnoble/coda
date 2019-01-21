@@ -356,16 +356,17 @@ test-suite lsp-test
   if !flag(test-tasty)
     buildable: False
 
-test-suite layout-test
+test-suite syntax-test
   import: aeson, app, base, bifunctors, bytestring, containers, filepath,
           lens, parsec, tagged, text
   main-is: Main.hs
   type: exitcode-stdio-1.0
-  hs-source-dirs: app/layout-test, src/layout-test
+  hs-source-dirs: app/syntax-test, src/syntax-test
   autogen-modules: Paths_coda
   other-modules:
     Paths_coda
     LayoutTest
+    ParserTest
   build-tool-depends: tasty-discover:tasty-discover >= 3.0 && < 4.3
   build-depends: common, algebra, syntax, lsp
   build-depends:

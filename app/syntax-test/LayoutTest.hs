@@ -28,16 +28,12 @@ import Relative.Delta
 import Language.Server.Protocol (Position(..))
 import qualified Syntax.Lexer as Lex
 import Syntax.Layout
-import qualified Syntax.Parser as Parse
 
 ptxt :: Int -> Text -> Layout
 ptxt n = dyckLayout 0 (Prefix . Text.pack . replicate n $ ' ') . Lex.lex
 
 txt :: Text -> Layout
 txt = dyckLayout 0 (Prefix "") . Lex.lex
-
-parse :: Text -> Parse.Parsed
-parse = Parse.parse . Lex.lex
 
 -- 23 overall
 -- 4 / 13 / 25
