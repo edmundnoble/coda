@@ -141,21 +141,21 @@ skip xs _ _ _ = xs
 
 qualified :: Bool -> Bool -> Action
 qualified o c xs d t ln = case Text.breakOnEnd "." (trim d t ln) of
-  (l,r) -> token xs $ TokenName (Delta d) $ Qualified o c (Text.init l) r
+  (l,r) -> tokenFlat xs $ TokenName (Delta d) $ Qualified o c (Text.init l) r
 
 unqualified :: Bool -> Bool -> Action
-unqualified o c xs d t l = token xs $ TokenName (Delta d) $ Unqualified o c (trim d t l)
+unqualified o c xs d t l = tokenFlat xs $ TokenName (Delta d) $ Unqualified o c (trim d t l)
 
 tok :: Action
-tok xs d t len = token xs $ Token (Delta d) $ Text.takeWord16 len $ Text.dropWord16 d t
+tok xs d t len = tokenFlat xs $ Token (Delta d) $ Text.takeWord16 len $ Text.dropWord16 d t
 
 keyword :: Action
-keyword xs d t l = token xs $ case readEither $ 'K' : cap (Text.unpack $ trim d t l) of
+keyword xs d t l = tokenFlat xs $ case readEither $ 'K' : cap (Text.unpack $ trim d t l) of
   Right kw -> TokenKeyword (Delta d) kw
   Left e -> lexicalError (Delta d) e
 
 layoutKeyword :: LayoutMode -> Action
-layoutKeyword i xs d t l = layoutToken xs i $ case readEither $ 'K' : cap (Text.unpack $ trim d t l) of
+layoutKeyword i xs d t l = layoutToken xs i $ flat $ case readEither $ 'K' : cap (Text.unpack $ trim d t l) of
   Right kw -> TokenKeyword (Delta d) kw
   Left e -> lexicalError (Delta d) e
 
@@ -165,13 +165,13 @@ opening xs d t _ = open xs $ Located (Delta d) $ case Text.iter t d of Text.Iter
 closing :: Action
 closing xs d t _ = close xs $ Located (Delta d) $ case Text.iter t d of Text.Iter c _ -> pair c
 
-literal :: Read a => (Delta -> a -> Token) -> Action
-literal f xs d t l = token xs $ case readEither $ Text.unpack $ trim d t l of
+literal :: Read a => (Delta -> a -> TokenFlat) -> Action
+literal f xs d t l = tokenFlat xs $ case readEither $ Text.unpack $ trim d t l of
   Left e  -> lexicalError (Delta d) e
   Right a -> f (Delta d) a
 
-reader :: Int -> (Delta -> a -> Token) -> Read.Reader a -> Action
-reader o f p xs d t l = token xs $ case p $ trim (d+o) t (l-o) of
+reader :: Int -> (Delta -> a -> TokenFlat) -> Read.Reader a -> Action
+reader o f p xs d t l = tokenFlat xs $ case p $ trim (d+o) t (l-o) of
   Left e       -> lexicalError (Delta d) e
   Right (a, _) -> f (Delta d) a
 
@@ -182,7 +182,7 @@ lex :: Text -> Dyck
 lex t0 = go t0 (fromText t0) def where
   go t inp xs = case alexScan inp 0 of
     AlexEOF              -> xs
-    AlexError inp'       -> go t inp' $ token xs $ lexicalError (Delta $ alexInputDelta inp) "lexical error"
+    AlexError inp'       -> go t inp' $ tokenFlat xs $ lexicalError (Delta $ alexInputDelta inp) "lexical error"
     AlexSkip inp' _      -> go t inp' xs
     AlexToken inp' l act -> go t inp' $ act xs (alexInputDelta inp) t l
 

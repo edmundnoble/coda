@@ -1,0 +1,2 @@
+--command=cabal new-repl coda
+--restart=./src

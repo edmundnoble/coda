@@ -25,6 +25,7 @@ module Dyck
   , LocatedPair
   , MismatchError(..)
   , token
+  , tokenFlat
   , layoutToken
   , close
   , open
@@ -114,6 +115,9 @@ instance Relative Dyck where
 token :: Dyck -> Token -> Dyck
 token (Dyck l ms r s _ e) a = Dyck l ms r (snocCat s a) def e
 
+tokenFlat :: Dyck -> TokenFlat -> Dyck
+tokenFlat d = token d . flat
+
 layoutToken :: Dyck -> LayoutMode -> Token -> Dyck
 layoutToken (Dyck l ms r s _ e) i a = Dyck l ms r (snocCat s a) i e
 
@@ -157,8 +161,8 @@ instance RelativeMonoid Dyck
 -- convert a dyck language skeleton to a set of tokens (including unmatched closings and openings)
 spine :: Dyck -> Cat Token
 spine (Dyck l0 ms0 r0 s0 _ _) = go1 l0 <> ms0 <> go2 r0 <> s0 where
-  go1 (Closing xs dp :< l') = xs <> (unmatchedClosing dp :< go1 l')
+  go1 (Closing xs dp :< l') = xs <> (flat (unmatchedClosing dp) :< go1 l')
   go1 _ = mempty
-  go2 (r' :> Opening dp ys) = go2 r' <> (unmatchedOpening dp :< ys)
+  go2 (r' :> Opening dp ys) = go2 r' <> (flat (unmatchedOpening dp) :< ys)
   go2 _ = mempty
 {-# inline spine #-}

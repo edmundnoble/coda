@@ -1,7 +1,9 @@
 signature Token
   ( Token
+  , TokenFlat
   , Pair
   , LayoutMode
+  , flat
   , nested
   , mismatch
   , unmatchedOpening
@@ -17,6 +19,13 @@ import Relative.Cat
 import Relative.Class
 import Relative.Delta
 import Relative.Located
+
+data TokenFlat
+instance Eq TokenFlat
+instance Ord TokenFlat
+instance Show TokenFlat
+instance Read TokenFlat
+instance Relative TokenFlat
 
 data Token
 instance Eq Token
@@ -42,8 +51,9 @@ instance Show LayoutMode
 instance Read LayoutMode
 instance Default LayoutMode
 
+flat :: TokenFlat -> Token
 nested :: Pair -> Delta -> Cat Token -> Delta -> Token
 mismatch :: Located Pair -> Located Pair -> Cat Token -> Token
-unmatchedOpening :: Located Pair -> Token
-unmatchedClosing :: Located Pair -> Token
-lexicalError :: Delta -> String -> Token
+unmatchedOpening :: Located Pair -> TokenFlat
+unmatchedClosing :: Located Pair -> TokenFlat
+lexicalError :: Delta -> String -> TokenFlat

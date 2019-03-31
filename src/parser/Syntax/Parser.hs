@@ -8,6 +8,7 @@
 {-# language GADTs #-}
 {-# language StandaloneDeriving #-}
 {-# language TypeFamilies #-}
+{-# language FunctionalDependencies #-}
 {-# language ViewPatterns #-}
 
 module Syntax.Parser where
@@ -31,7 +32,7 @@ import qualified Relative.Cat as Cat
 import qualified Text.Parsec.Pos
 import Text.Parsec.Combinator(option, sepBy, sepBy1, sepEndBy1)
 import Text.Parsec.Error(ParseError)
-import Text.Parsec.Prim(ParsecT, Stream(..), runParser, tokenPrim, try)
+import Text.Parsec.Prim(ParsecT, Stream(..), (<?>), runParser, tokenPrim, try)
 
 newtype TokenStream = TokenStream (Cat Token)
 
@@ -39,6 +40,9 @@ newtype TokenStream = TokenStream (Cat Token)
 instance Monad m => Stream TokenStream m Token where
   uncons (TokenStream c) =
     pure . over (_Just._2) TokenStream $ Control.Lens.uncons c
+
+class DyckParser m p | m -> p where
+  enclosing :: p -> m a -> m a
 
 eitherToMaybe :: Either a b -> Maybe b
 eitherToMaybe = either (const Nothing) Just
@@ -131,7 +135,7 @@ rawTok ::
   Text -> ParsecT TokenStream u m ()
 rawTok t = do
   _ <- satisfy $ \case
-    Token _ t' -> t == t'
+    TokenFlat (Token _ t') -> t == t'
     _ -> False
   return ()
 
@@ -149,14 +153,14 @@ keyword ::
   Monad m =>
   Keyword -> ParsecT TokenStream u m Token
 keyword k = satisfy $ \case
-  TokenKeyword _ k' -> k == k'
+  TokenFlat (TokenKeyword _ k') -> k == k'
   _ -> False
 
 identP ::
   Monad m =>
   ParsecT TokenStream u m Name
 identP = opt $ \case
-  TokenName _ n -> Just n
+  TokenFlat (TokenName _ n) -> Just n
   _ -> Nothing
 
 satisfy ::
@@ -212,32 +216,36 @@ exprP
     appOrIdentP
   where
   appOrIdentP = do
-    i <- identP
-    try (EApp (EIdent i) <$> exprP) <|> pure (EIdent i)
+    i <- identP <?> "identifier"
+    try (EApp (EIdent i) <$> exprP) <|> pure (EIdent i) <?> "function application"
   lamP = ELam <$>
     (rawTok "\\" *> patP) <*>
-    (rawTok "->" *> exprP)
+    (rawTok "->" *> exprP) <?> "lambda"
   letP = ELet <$>
     (keyword KLet *> patP) <*>
     (rawTok "=" *> exprP) <*>
-    (keyword KIn *> exprP)
-  tupleP = ETuple <$> sepBy exprP (rawTok ",")
+    (keyword KIn *> exprP) <?> "let-binding"
+  tupleP = ETuple <$> sepBy exprP (rawTok ",") <?> "tuple"
 
+-- fixme
 patP ::  TokParser Pat
-patP = Pat <$> identP
+patP = Pat <$> identP <?> "pattern"
 
 doStmtP :: TokParser DoStatement
 doStmtP
-  = try (pur <|> impur) <*> exprP <|> DoStatement Nothing Impure <$> exprP
+  = try (pur <|> impur) <*> exprP <|> (DoStatement Nothing Impure <$> exprP <?> "do-statement")
   where
-  pur = flip DoStatement Pure <$> (keyword KLet *> (Just <$> patP) <* rawTok "=")
-  impur = flip DoStatement Impure <$> (Just <$> patP <* rawTok "<-")
+  pur = flip DoStatement Pure <$>
+    (keyword KLet *> (Just <$> patP) <* rawTok "=") <?> "do-let-binding"
+  impur = flip DoStatement Impure <$>
+    (Just <$> patP <* rawTok "<-") <?> "do-binding"
 
 -- this doesn't work; we have no idea how to denote multiple
 -- statements. We need a Cat Dyck or Free Cat Dyck or something.
 doP :: TokParser Do
 doP
-  = keyword KDo *> fmap Do (sepBy1 doStmtP (option () (void $ rawTok ";")))
+  = keyword KDo *> (Do <$> (sepBy1 doStmtP (option () (void $ rawTok ";"))))
+    <?> "do"
 
 parse :: Dyck -> Parsed
 parse = let
