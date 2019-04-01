@@ -22,6 +22,7 @@ import Data.Text(Text)
 
 import Syntax.Dyck
 import Syntax.Name
+import Syntax.Trifecta
 import Syntax.Token
 import Relative.Cat(Cat)
 import Relative.Delta(Delta(..), HasDelta(..))
